@@ -1,50 +1,48 @@
 "use strict";
+
 /** @type {import('sequelize-cli').Migration} */
 const { ENUMS } = require("../utils/common");
-const { BOOKED, PENDING, CANCELLED, INITIATED } = ENUMS.BOOKING_STATUS;
+const { ECONOMY, PREMIUM_ECONOMY, BUSINESS, FIRST } = ENUMS.CLASS_TYPE;
+const { WINDOW, MIDDLE, AISLE, STANDARD } = ENUMS.SEAT_TYPE;
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await queryInterface.createTable("Bookings", {
+    await queryInterface.createTable("Seats", {
       id: {
         allowNull: false,
         autoIncrement: true,
         primaryKey: true,
         type: Sequelize.INTEGER,
       },
-      userId: {
+      row: {
+        type: Sequelize.STRING,
+        allowNull: false,
+      },
+      number: {
         type: Sequelize.INTEGER,
         allowNull: false,
       },
-      flightId: {
-        type: Sequelize.INTEGER,
+      seatNumber: {
+        type: Sequelize.STRING,
+        allowNull: false,
+      },
+      seatClass: {
+        type: Sequelize.ENUM,
+        values: [ECONOMY, PREMIUM_ECONOMY, BUSINESS, FIRST],
+        defaultValue: ECONOMY,
+        allowNull: false,
+      },
+      seatType: {
+        type: Sequelize.ENUM,
+        values: [WINDOW, MIDDLE, AISLE, STANDARD],
+        defaultValue: STANDARD,
+        allowNull: false,
+      },
+      isBooked: {
+        type: Sequelize.BOOLEAN,
         allowNull: false,
       },
       airplaneId: {
         type: Sequelize.INTEGER,
-        allowNull: false,
-      },
-      seats: {
-        type: Sequelize.STRING,
-        allowNull: false,
-      },
-      totalPrice: {
-        type: Sequelize.FLOAT,
-        allowNull: false,
-      },
-      bookingTime: {
-        type: Sequelize.DATE,
-        defaultValue: Sequelize.NOW,
-        allowNull: false,
-      },
-      isPaid: {
-        type: Sequelize.BOOLEAN,
-        defaultValue: false,
-        allowNull: false,
-      },
-      status: {
-        type: Sequelize.ENUM,
-        values: [BOOKED, PENDING, CANCELLED, INITIATED],
-        defaultValue: INITIATED,
         allowNull: false,
       },
       createdAt: {
@@ -57,7 +55,8 @@ module.exports = {
       },
     });
   },
+
   async down(queryInterface, Sequelize) {
-    await queryInterface.dropTable("Bookings");
+    await queryInterface.dropTable("Seats");
   },
 };
