@@ -52,7 +52,7 @@ function removeTempBooking() {
     } catch (error) {
       logger.error("Error cleaning up temp bookings:", error);
     }
-  }, 1000 * 60);
+  }, 1000 * 60 * 10);
 }
 
 module.exports = {

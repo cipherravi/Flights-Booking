@@ -31,6 +31,11 @@ module.exports = (sequelize, DataTypes) => {
         defaultValue: INITIATED,
         allowNull: false,
       },
+      idempotencyKey: {
+        type: DataTypes.CHAR(36),
+        unique: true,
+        allowNull: false,
+      },
     },
     {
       sequelize,

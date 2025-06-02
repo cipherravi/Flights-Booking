@@ -83,8 +83,8 @@ class SeatRepository extends CrudRepository {
     );
   }
 
-  async bulkUpdate(data, condition) {
-    return Seat.update(data, { where: condition });
+  async bulkUpdate(data, condition, transaction) {
+    return Seat.update(data, { where: condition }, transaction);
   }
 }
 

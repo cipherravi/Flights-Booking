@@ -28,12 +28,71 @@ async function createBooking(req, res) {
     );
     SuccessResponse.data = response;
     SuccessResponse.message = "Successfully created Booking";
-    return res.status(StatusCodes.OK).json(response);
+    return res.status(StatusCodes.OK).json(SuccessResponse);
   } catch (error) {
-    ErrorResponse.message = "something went wrong";
+    logger.error(error.stack || error.message);
+    const statusCode =
+      error instanceof AppError
+        ? error.statusCode
+        : StatusCodes.INTERNAL_SERVER_ERROR;
+    const message =
+      error instanceof AppError ? error.message : "Something went wrong";
     ErrorResponse.error = error;
-    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json(ErrorResponse);
+    ErrorResponse.message = message;
+    return res.status(statusCode).json(ErrorResponse);
   }
 }
 
-module.exports = { createBooking };
+async function cancelBooking(req, res) {
+  const { bookingId, userId } = req.body;
+  try {
+    const response = await BookingService.cancelBooking(
+      bookingId,
+      Number(userId)
+    );
+    SuccessResponse.data = response;
+    SuccessResponse.message = "Successfully cancelled booking";
+    return res.status(StatusCodes.OK).json(SuccessResponse);
+  } catch (error) {
+    logger.error(error.stack || error.message);
+    const statusCode =
+      error instanceof AppError
+        ? error.statusCode
+        : StatusCodes.INTERNAL_SERVER_ERROR;
+    const message =
+      error instanceof AppError ? error.message : "Something went wrong";
+    ErrorResponse.error = error;
+    ErrorResponse.message = message;
+    return res.status(statusCode).json(ErrorResponse);
+  }
+}
+
+async function makePayment(req, res) {
+  const { bookingId, userId } = req.body;
+  try {
+    if (!bookingId || !userId) {
+      throw new AppError("Provide valid details", StatusCodes.BAD_REQUEST);
+    }
+
+    const response = await BookingService.makePayment(
+      bookingId,
+      Number(userId)
+    );
+    SuccessResponse.data = response;
+    SuccessResponse.message = response.Status || "Successfully Booked Ticket";
+    return res.status(StatusCodes.OK).json(SuccessResponse);
+  } catch (error) {
+    logger.error(error.stack || error.message);
+    const statusCode =
+      error instanceof AppError
+        ? error.statusCode
+        : StatusCodes.INTERNAL_SERVER_ERROR;
+    const message =
+      error instanceof AppError ? error.message : "Something went wrong";
+    ErrorResponse.error = error;
+    ErrorResponse.message = message;
+    return res.status(statusCode).json(ErrorResponse);
+  }
+}
+
+module.exports = { createBooking, cancelBooking, makePayment };

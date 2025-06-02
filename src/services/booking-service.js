@@ -1,4 +1,10 @@
-const { BookingRepository, SeatRepository } = require("../repositories");
+const axios = require("axios");
+const { v4 } = require("uuid");
+const {
+  BookingRepository,
+  SeatRepository,
+  IdempotencyKeyRepository,
+} = require("../repositories");
 const { StatusCodes } = require("http-status-codes");
 const AppError = require("../utils/AppError");
 const { getLogger } = require("../config");
@@ -6,6 +12,10 @@ const logger = getLogger(__filename);
 const { Booking, sequelize } = require("../models");
 const seatRepository = new SeatRepository();
 const bookingRepository = new BookingRepository();
+const idempotencyKeyRepository = new IdempotencyKeyRepository();
+const { ServerConfig } = require("../config");
+const { FLIGHT_SERVICE_URL } = ServerConfig;
+const { Op } = require("sequelize");
 
 async function createBooking(
   userId,
@@ -16,7 +26,6 @@ async function createBooking(
 ) {
   const transaction = await sequelize.transaction();
   try {
-    //check if seat is available
     const checkSeatAvailability = await seatRepository.checkSeatAvailability(
       seatNumbers,
       airplaneId
@@ -28,11 +37,11 @@ async function createBooking(
         StatusCodes.BAD_REQUEST
       );
     }
-    // return checkSeatAvailability;
-    // lock  the seat
+
     await seatRepository.lockSelectedSeat(seatNumbers, airplaneId, transaction);
 
-    // book seat and generate response
+    const idempotencyKey = v4();
+
     const booking = await bookingRepository.create(
       {
         userId,
@@ -41,19 +50,22 @@ async function createBooking(
         seats: seatNumbers.join(","),
         totalPrice: calculatedPrice,
         status: "PENDING",
+        idempotencyKey: idempotencyKey,
       },
       { transaction }
     );
 
-    // set isBooked = true
     await seatRepository.updateSeatStatus(seatNumbers, transaction);
 
-    // COMMIT
     await transaction.commit();
 
     // updateRemaining seat with API
     const noOfSeats = seatNumbers.length;
-    const updateRemainingSeat = () => {};
+    await axios.patch(`${FLIGHT_SERVICE_URL}/api/v1/flights`, {
+      id: flightId,
+      seats: noOfSeats,
+      decrease: true,
+    });
 
     return booking;
   } catch (error) {
@@ -79,4 +91,108 @@ async function createBooking(
   }
 }
 
-module.exports = { createBooking };
+async function cancelBooking(bookingId, userId) {
+  const transaction = await sequelize.transaction();
+  try {
+    const fetchData = await bookingRepository.get(bookingId);
+    if (!fetchData) {
+      throw new AppError("No Bookings Found", StatusCodes.BAD_REQUEST);
+    }
+    const seatNumbers = fetchData.seats.split(",").map((s) => s.trim());
+    const noOfSeats = seatNumbers.length;
+
+    if (userId !== fetchData.userId) {
+      throw new AppError("User doesn't have booking", StatusCodes.BAD_REQUEST);
+    }
+    await bookingRepository.destroy({
+      id: bookingId,
+      userId: userId,
+    });
+
+    await seatRepository.bulkUpdate(
+      { isBooked: false },
+      {
+        seatNumber: {
+          [Op.in]: seatNumbers,
+        },
+      },
+      transaction
+    );
+    await transaction.commit();
+
+    // updateRemaining seat with API
+
+    await axios.patch(`${FLIGHT_SERVICE_URL}/api/v1/flights`, {
+      id: fetchData.flightId,
+      seats: noOfSeats,
+      decrease: false,
+    });
+
+    return fetchData;
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+}
+
+async function makePayment(bookingId, userId) {
+  const transaction = await sequelize.transaction();
+  try {
+    const bookingDetails = await bookingRepository.get(bookingId);
+    const { userId: dbUserId, idempotencyKey } = bookingDetails;
+
+    if (!bookingDetails) {
+      throw new AppError(
+        "Payment failed , Booking not found",
+        StatusCodes.BAD_REQUEST
+      );
+    }
+    const checkPayment = await idempotencyKeyRepository.checkPayment({
+      key: { [Op.eq]: idempotencyKey },
+    });
+
+    if (checkPayment) {
+      await transaction.commit();
+      return { Status: "Booking already done" };
+    }
+
+    if (userId !== dbUserId) {
+      throw new AppError(
+        "Payment failed ,Invlaid user",
+        StatusCodes.BAD_REQUEST
+      );
+    }
+
+    // PUT HERE YOUR PAYMENT LOGIC
+    const chargeUser = () => {
+      return {
+        paymentStatus: "OK",
+      };
+    };
+
+    if (!chargeUser.paymentStatus == "OK") {
+      throw new AppError(
+        "Payment Failed , please try again ",
+        StatusCodes.UNPROCESSABLE_ENTITY
+      );
+    }
+    const response = await bookingRepository.updateBookingStatus(
+      { isPaid: true, status: "booked" },
+      { userId: userId },
+      transaction
+    );
+
+    await idempotencyKeyRepository.addKeys(
+      { key: idempotencyKey, userId },
+      transaction
+    );
+
+    await transaction.commit();
+    return response;
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+}
+
+module.exports = { createBooking, cancelBooking, makePayment };
