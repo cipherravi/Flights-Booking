@@ -26,6 +26,7 @@ async function createBooking(
 ) {
   const transaction = await sequelize.transaction();
   try {
+    logger.info("Checking seat availability...");
     const checkSeatAvailability = await seatRepository.checkSeatAvailability(
       seatNumbers,
       airplaneId
@@ -37,11 +38,12 @@ async function createBooking(
         StatusCodes.BAD_REQUEST
       );
     }
-
+    logger.info("Locking selected seats...");
     await seatRepository.lockSelectedSeat(seatNumbers, airplaneId, transaction);
 
+    logger.info("Creating uuid...");
     const idempotencyKey = v4();
-
+    logger.info("Creating booking entry in DB...");
     const booking = await bookingRepository.create(
       {
         userId,
@@ -54,10 +56,21 @@ async function createBooking(
       },
       { transaction }
     );
-
+    logger.info("Updating seat status in DB...");
     await seatRepository.updateSeatStatus(seatNumbers, transaction);
-
+    logger.info("Committing transaction...");
     await transaction.commit();
+
+    logger.info(
+      `Calling FLIGHT_SERVICE to update seats. URL: ${FLIGHT_SERVICE_URL}/api/v1/flights`
+    );
+    logger.info(
+      `Payload: ${JSON.stringify({
+        id: flightId,
+        seats: seatNumbers.length,
+        decrease: true,
+      })}`
+    );
 
     // updateRemaining seat with API
     const noOfSeats = seatNumbers.length;
@@ -69,6 +82,8 @@ async function createBooking(
 
     return booking;
   } catch (error) {
+    logger.error("Rolling back transaction due to error");
+    logger.error("Booking failed:", error.stack || error.message);
     await transaction.rollback();
     if (error.name == "SequelizeValidationError") {
       let explanation = [];
