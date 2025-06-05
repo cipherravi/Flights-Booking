@@ -1,4 +1,5 @@
 const { SeatService } = require("../services");
+const generateSeatsForAirplane = require("../utils/helper/generateSeatsForAirplane");
 const { StatusCodes } = require("http-status-codes");
 const { getLogger } = require("../config");
 const AppError = require("../utils/AppError");
@@ -78,4 +79,27 @@ async function updateAirplaneSeat(req, res) {
   }
 }
 
-module.exports = { getAirplaneSeats, updateAirplaneSeat };
+async function generateSeats(req, res) {
+  try {
+    const { id, capacity } = req.body;
+    const response = await generateSeatsForAirplane(id, capacity);
+    SuccessResponse.data = response;
+    SuccessResponse.message = `Successfully added seats for airplane id ${id} with capacity ${capacity}`;
+    return res.status(StatusCodes.CREATED).json(SuccessResponse);
+  } catch (error) {
+    logger.error(error.stack || error.message);
+
+    //If it's an AppError then use it's own message status codes
+    const statusCode =
+      error instanceof AppError
+        ? error.statusCode
+        : StatusCodes.INTERNAL_SERVER_ERROR;
+    const message =
+      error instanceof AppError ? error.message : "Something went wrong";
+
+    ErrorResponse.error = message;
+    return res.status(statusCode).json(ErrorResponse);
+  }
+}
+
+module.exports = { getAirplaneSeats, updateAirplaneSeat, generateSeats };
