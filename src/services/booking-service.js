@@ -13,8 +13,8 @@ const { Booking, sequelize } = require("../models");
 const seatRepository = new SeatRepository();
 const bookingRepository = new BookingRepository();
 const idempotencyKeyRepository = new IdempotencyKeyRepository();
-const { ServerConfig } = require("../config");
-const { FLIGHT_SERVICE_URL } = ServerConfig;
+const { serverConfig } = require("../config");
+const { FLIGHT_SERVICE_URL, INTERNAL_FLIGHT_SERVICE_TOKEN } = serverConfig;
 const { Op } = require("sequelize");
 
 async function createBooking(
@@ -74,11 +74,20 @@ async function createBooking(
 
     // updateRemaining seat with API
     const noOfSeats = seatNumbers.length;
-    await axios.patch(`${FLIGHT_SERVICE_URL}/api/v1/flights`, {
-      id: flightId,
-      seats: noOfSeats,
-      decrease: true,
-    });
+
+    await axios.patch(
+      `${FLIGHT_SERVICE_URL}/api/v1/flights`,
+      {
+        id: flightId,
+        seats: noOfSeats,
+        decrease: true,
+      },
+      {
+        headers: {
+          "x-access-token": `${INTERNAL_FLIGHT_SERVICE_TOKEN}`,
+        },
+      }
+    );
 
     return booking;
   } catch (error) {
@@ -137,11 +146,19 @@ async function cancelBooking(bookingId, userId) {
 
     // updateRemaining seat with API
 
-    await axios.patch(`${FLIGHT_SERVICE_URL}/api/v1/flights`, {
-      id: fetchData.flightId,
-      seats: noOfSeats,
-      decrease: false,
-    });
+    await axios.patch(
+      `${FLIGHT_SERVICE_URL}/api/v1/flights`,
+      {
+        id: fetchData.flightId,
+        seats: noOfSeats,
+        decrease: false,
+      },
+      {
+        headers: {
+          "x-access-token": `${INTERNAL_FLIGHT_SERVICE_TOKEN}`,
+        },
+      }
+    );
 
     return fetchData;
   } catch (error) {
@@ -166,7 +183,7 @@ async function makePayment(bookingId, userId) {
       key: { [Op.eq]: idempotencyKey },
     });
 
-    if (checkPayment) {
+    if (checkPayment.length == 1) {
       await transaction.commit();
       return { Status: "Booking already done" };
     }
@@ -210,4 +227,17 @@ async function makePayment(bookingId, userId) {
   }
 }
 
-module.exports = { createBooking, cancelBooking, makePayment };
+async function getBookings(userId) {
+  try {
+    const bookings = await bookingRepository.getAll({ userId: userId });
+    if (!bookings) {
+      throw new AppError("No Bookings Found", StatusCodes.NOT_FOUND);
+    }
+
+    return bookings;
+  } catch (error) {
+    throw error;
+  }
+}
+
+module.exports = { createBooking, cancelBooking, makePayment, getBookings };

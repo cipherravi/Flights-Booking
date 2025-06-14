@@ -2,9 +2,12 @@ const express = require("express");
 const router = express.Router();
 
 const { BookingController } = require("../../controllers");
+const { getBookings, createBooking, makePayment, cancelBooking } =
+  BookingController;
 
-router.post("/", BookingController.createBooking);
-router.post("/payments", BookingController.makePayment);
-router.delete("/", BookingController.cancelBooking);
+router.get("/", getBookings);
+router.post("/", createBooking);
+router.post("/payments", makePayment);
+router.delete("/", cancelBooking);
 
 module.exports = router;

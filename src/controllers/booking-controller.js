@@ -7,7 +7,6 @@ const { SuccessResponse, ErrorResponse } = require("../utils/common");
 
 async function createBooking(req, res) {
   const {
-    userId,
     flightId,
     seatNumber: rawSeatString,
     airplaneId,
@@ -20,7 +19,7 @@ async function createBooking(req, res) {
 
   try {
     const response = await BookingService.createBooking(
-      userId,
+      req.user.id,
       flightId,
       seatNumbers,
       airplaneId,
@@ -44,11 +43,11 @@ async function createBooking(req, res) {
 }
 
 async function cancelBooking(req, res) {
-  const { bookingId, userId } = req.body;
+  const { bookingId } = req.body;
   try {
     const response = await BookingService.cancelBooking(
       bookingId,
-      Number(userId)
+      Number(req.user.id)
     );
     SuccessResponse.data = response;
     SuccessResponse.message = "Successfully cancelled booking";
@@ -68,15 +67,15 @@ async function cancelBooking(req, res) {
 }
 
 async function makePayment(req, res) {
-  const { bookingId, userId } = req.body;
+  const { bookingId } = req.body;
   try {
-    if (!bookingId || !userId) {
+    if (!bookingId) {
       throw new AppError("Provide valid details", StatusCodes.BAD_REQUEST);
     }
 
     const response = await BookingService.makePayment(
       bookingId,
-      Number(userId)
+      Number(req.user.id)
     );
     SuccessResponse.data = response;
     SuccessResponse.message = response.Status || "Successfully Booked Ticket";
@@ -88,11 +87,43 @@ async function makePayment(req, res) {
         ? error.statusCode
         : StatusCodes.INTERNAL_SERVER_ERROR;
     const message =
-      error instanceof AppError ? error.message : "Something went wrong";
+      error instanceof AppError
+        ? error.message
+        : "Something went wrong while making payment";
     ErrorResponse.error = error;
     ErrorResponse.message = message;
     return res.status(statusCode).json(ErrorResponse);
   }
 }
 
-module.exports = { createBooking, cancelBooking, makePayment };
+async function getBookings(req, res) {
+  try {
+    const { id: userId } = req.user;
+    console.log(userId);
+    if (!userId) {
+      throw new AppError("userId Missing", StatusCodes.BAD_REQUEST);
+    }
+    const response = await BookingService.getBookings(userId);
+    if (!response) {
+      throw new AppError("No bookings found", StatusCodes.NOT_FOUND);
+    }
+    SuccessResponse.data = response;
+    SuccessResponse.message = "Successfully fetched all bookings";
+    return res.status(StatusCodes.OK).json(SuccessResponse);
+  } catch (error) {
+    logger.error(error.stack || error.message);
+    const statusCode =
+      error instanceof AppError
+        ? error.statusCode
+        : StatusCodes.INTERNAL_SERVER_ERROR;
+    const message =
+      error instanceof AppError
+        ? error.message
+        : "Something went wrong while fetching bookings";
+    ErrorResponse.error = error;
+    ErrorResponse.message = message;
+    return res.status(statusCode).json(ErrorResponse);
+  }
+}
+
+module.exports = { createBooking, cancelBooking, makePayment, getBookings };

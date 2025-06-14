@@ -6,4 +6,6 @@ if (process.env.NODE_ENV !== "production") {
 module.exports = {
   PORT: process.env.PORT,
   FLIGHT_SERVICE_URL: process.env.FLIGHT_SERVICE_URL,
+  INTERNAL_FLIGHT_SERVICE_TOKEN: process.env.INTERNAL_FLIGHT_SERVICE_TOKEN,
+  SECRET_KEY: process.env.SECRET_KEY,
 };
