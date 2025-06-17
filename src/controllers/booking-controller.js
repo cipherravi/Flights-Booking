@@ -4,18 +4,19 @@ const { getLogger } = require("../config");
 const AppError = require("../utils/AppError");
 const logger = getLogger(__filename);
 const { SuccessResponse, ErrorResponse } = require("../utils/common");
+const calculateTotalPrice = require("../utils/helper/calculateTotalPrice");
 
 async function createBooking(req, res) {
-  const {
-    flightId,
-    seatNumber: rawSeatString,
-    airplaneId,
-    totalPrice,
-  } = req.body;
+  const { flightId, seatNumber: rawSeatString, airplaneId } = req.body;
+  const { price } = req.flight;
 
   const seatNumbers = rawSeatString.split(",").map((s) => s.trim());
-  const numberOfSeats = seatNumbers.length;
-  const calculatedPrice = totalPrice * numberOfSeats;
+  const calculatedPrice = await calculateTotalPrice(
+    price,
+    flightId,
+    airplaneId,
+    seatNumbers
+  );
 
   try {
     const response = await BookingService.createBooking(
