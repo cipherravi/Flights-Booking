@@ -14,11 +14,16 @@ const seatRepository = new SeatRepository();
 const bookingRepository = new BookingRepository();
 const idempotencyKeyRepository = new IdempotencyKeyRepository();
 const { serverConfig } = require("../config");
-const { FLIGHT_SERVICE_URL, INTERNAL_FLIGHT_SERVICE_TOKEN } = serverConfig;
+const {
+  FLIGHT_SERVICE_URL,
+  INTERNAL_FLIGHT_SERVICE_TOKEN,
+  FLIGHT_API_GATWAY_URL,
+} = serverConfig;
 const { Op } = require("sequelize");
 
 async function createBooking(
   userId,
+  userEmail,
   flightId,
   seatNumbers,
   airplaneId,
@@ -56,6 +61,7 @@ async function createBooking(
       },
       { transaction }
     );
+    console.log("seatnumbers: ", seatNumbers);
     logger.info("Updating seat status in DB...");
     await seatRepository.updateSeatStatus(seatNumbers, transaction);
     logger.info("Committing transaction...");
@@ -85,6 +91,22 @@ async function createBooking(
       {
         headers: {
           "x-access-token": `${INTERNAL_FLIGHT_SERVICE_TOKEN}`,
+        },
+      }
+    );
+
+    axios.post(
+      `${FLIGHT_API_GATWAY_URL}/api/v1/mail/ticket`,
+      {
+        header: "Ticket Booked",
+        recepientEmail: `${userEmail}`,
+        subject: `Ticket Booked for your flight ${flightId}`,
+        content: `Your ticket with seats ${seatNumbers} for flight Id ${flightId}  has been booked to make it truly yours continue to make payment and enjoy your ride. Have a safe and happy journey from Flights
+      `,
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
         },
       }
     );

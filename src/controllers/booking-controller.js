@@ -21,6 +21,7 @@ async function createBooking(req, res) {
   try {
     const response = await BookingService.createBooking(
       req.user.id,
+      req.user.email,
       flightId,
       seatNumbers,
       airplaneId,
