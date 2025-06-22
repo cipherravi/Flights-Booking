@@ -9,7 +9,7 @@ const calculateTotalPrice = require("../utils/helper/calculateTotalPrice");
 async function createBooking(req, res) {
   const { flightId, seatNumber: rawSeatString, airplaneId } = req.body;
   const { price } = req.flight;
-
+  console.log("USER", req.user);
   const seatNumbers = rawSeatString.split(",").map((s) => s.trim());
   const calculatedPrice = await calculateTotalPrice(
     price,
@@ -17,10 +17,11 @@ async function createBooking(req, res) {
     airplaneId,
     seatNumbers
   );
-
+  console.log(req.user);
   try {
     const response = await BookingService.createBooking(
       req.user.id,
+      req.user.name,
       req.user.email,
       flightId,
       seatNumbers,
@@ -69,7 +70,7 @@ async function cancelBooking(req, res) {
 }
 
 async function makePayment(req, res) {
-  const { bookingId } = req.body;
+  const { bookingId } = req.query;
   try {
     if (!bookingId) {
       throw new AppError("Provide valid details", StatusCodes.BAD_REQUEST);
@@ -77,7 +78,9 @@ async function makePayment(req, res) {
 
     const response = await BookingService.makePayment(
       bookingId,
-      Number(req.user.id)
+      Number(req.user.id),
+      req.user.name,
+      req.user.email
     );
     SuccessResponse.data = response;
     SuccessResponse.message = response.Status || "Successfully Booked Ticket";

@@ -6,10 +6,11 @@ const { getBookings, createBooking, makePayment, cancelBooking } =
   BookingController;
 const { BookingMiddleware } = require("../../middlewares");
 const { verifyFlight } = BookingMiddleware;
+const verifyUser = require("../../middlewares/verifyUser");
 
-router.get("/", getBookings);
-router.post("/", verifyFlight, createBooking);
-router.post("/payments", makePayment);
-router.delete("/", cancelBooking);
+router.get("/", verifyUser, getBookings);
+router.post("/", verifyUser, verifyFlight, createBooking);
+router.post("/payments", verifyUser, makePayment);
+router.delete("/", verifyUser, cancelBooking);
 
 module.exports = router;

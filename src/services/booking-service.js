@@ -18,11 +18,13 @@ const {
   FLIGHT_SERVICE_URL,
   INTERNAL_FLIGHT_SERVICE_TOKEN,
   FLIGHT_API_GATWAY_URL,
+  FLIGHT_BOOKING_SERVICE_URL,
 } = serverConfig;
 const { Op } = require("sequelize");
 
 async function createBooking(
   userId,
+  userName,
   userEmail,
   flightId,
   seatNumbers,
@@ -61,7 +63,7 @@ async function createBooking(
       },
       { transaction }
     );
-    console.log("seatnumbers: ", seatNumbers);
+
     logger.info("Updating seat status in DB...");
     await seatRepository.updateSeatStatus(seatNumbers, transaction);
     logger.info("Committing transaction...");
@@ -95,14 +97,21 @@ async function createBooking(
       }
     );
 
-    axios.post(
+    const paymentLink = `${FLIGHT_BOOKING_SERVICE_URL}/api/v1/bookings/payments?bookingId=${booking.id}`;
+
+    await axios.post(
       `${FLIGHT_API_GATWAY_URL}/api/v1/mail/ticket`,
       {
-        header: "Ticket Booked",
-        recepientEmail: `${userEmail}`,
-        subject: `Ticket Booked for your flight ${flightId}`,
-        content: `Your ticket with seats ${seatNumbers} for flight Id ${flightId}  has been booked to make it truly yours continue to make payment and enjoy your ride. Have a safe and happy journey from Flights
-      `,
+        header: "Flight Booking",
+        subject: `Flight Ticket Reserved -> Flight ${flightId}`,
+        customerEmail: userEmail,
+        templateName: "ticketReserved",
+        templateData: {
+          flightId,
+          seatNumbers,
+          customerName: userName,
+          paymentLink: paymentLink,
+        },
       },
       {
         headers: {
@@ -189,11 +198,20 @@ async function cancelBooking(bookingId, userId) {
   }
 }
 
-async function makePayment(bookingId, userId) {
+async function makePayment(bookingId, userId, userName, userEmail) {
   const transaction = await sequelize.transaction();
+
   try {
     const bookingDetails = await bookingRepository.get(bookingId);
-    const { userId: dbUserId, idempotencyKey } = bookingDetails;
+    const {
+      userId: dbUserId,
+      idempotencyKey,
+      flightId,
+      airplaneId,
+      totalPrice,
+      seats,
+      bookingTime,
+    } = bookingDetails;
 
     if (!bookingDetails) {
       throw new AppError(
@@ -201,6 +219,7 @@ async function makePayment(bookingId, userId) {
         StatusCodes.BAD_REQUEST
       );
     }
+
     const checkPayment = await idempotencyKeyRepository.checkPayment({
       key: { [Op.eq]: idempotencyKey },
     });
@@ -242,6 +261,41 @@ async function makePayment(bookingId, userId) {
     );
 
     await transaction.commit();
+
+    const bookingTimeIST = new Date(bookingTime).toLocaleString("en-IN", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+
+    axios.post(
+      `${FLIGHT_API_GATWAY_URL}/api/v1/mail/ticket`,
+      {
+        header: "Flight Booking",
+        subject: `Flight Ticket Confirm for booking id - ${bookingId}`,
+        customerEmail: userEmail,
+        templateName: "ticketConfirmed",
+        templateData: {
+          airplaneId: airplaneId,
+          flightId: flightId,
+          price: totalPrice,
+          seatNumbers: seats,
+          customerName: userName,
+          bookingTime: bookingTimeIST,
+          status: "CONFIRMED",
+        },
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
     return response;
   } catch (error) {
     await transaction.rollback();
